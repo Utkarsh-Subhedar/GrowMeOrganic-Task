@@ -88,7 +88,6 @@ const ArtworkTable: React.FC = () => {
   // Checkbox selection handler: Merges current page selection with global map
   const onSelectionChange = (e: { value: Artwork[] }) => {
     const newlySelected = new Set(e.value.map((r) => r.id));
-    const currentRowsIds = new Set(rows.map((r) => r.id));
 
     setSelectedMap((prev) => {
       const updated = new Map(prev);
