@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { DataTable } from "primereact/datatable";
 import { Column } from "primereact/column";
+import { fetchArtworks } from "./Api";
 import { Dropdown } from "primereact/dropdown";
-import { OverlayPanel } from "primereact/overlaypanel";
-import { Button } from "primereact/button";
-import { fetchArtworks } from "./Api"; 
+import { OverlayPanel } from "primereact/overlaypanel"; // Added Import
+import { Button } from "primereact/button"; // Added Import
+
 interface Artwork {
   id: number;
   title: string;
@@ -15,132 +16,160 @@ interface Artwork {
   date_end: number | null;
 }
 
+// Helper to map API data to Artwork type
+const mapToArtwork = (item: any): Artwork => ({
+  id: item.id,
+  title: item.title,
+  place_of_origin: item.place_of_origin,
+  artist_display: item.artist_display,
+  inscriptions: item.inscriptions,
+  date_start: item.date_start,
+  date_end: item.date_end,
+});
+
 const ArtworkTable: React.FC = () => {
   const [rows, setRows] = useState<Artwork[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Pagination state
   const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState<number | undefined>(undefined);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [totalRecords, setTotalRecords] = useState(0);
 
-  const [selectedRows, setSelectedRows] = useState<Artwork[]>([]);
+  // Selection state: store selected rows across all pages using a Map
+  const [selectedMap, setSelectedMap] = useState<Map<number, Artwork>>(new Map());
 
+  // Overlay and Input state for the new feature
   const [inputNumber, setInputNumber] = useState("");
   const overlayRef = useRef<OverlayPanel>(null);
 
-  const rowsPerPageOptions = [
-    { label: "5", value: 5 },
-    { label: "10", value: 10 },
-    { label: "25", value: 25 },
-    { label: "50", value: 50 },
-  ];
+  // Derive current page selection for DataTable
+  const selectedOnPage = rows.filter((r) => selectedMap.has(r.id));
 
-  async function loadPageData(pageNumber: number, limit: number) {
+  // -------------------------------------------------------------------
+  // DATA FETCHING & PAGINATION
+  // -------------------------------------------------------------------
+
+  const loadPage = async (p: number, limit: number) => {
     setLoading(true);
     try {
-      const data: any = await fetchArtworks(pageNumber, limit);
-      const allArtworks: Artwork[] = [];
+      const data: any = await fetchArtworks(p, limit);
+      const mapped = (data.data || [])
+        .filter((d: any) => d.id) // Filter out items without an ID
+        .map(mapToArtwork);
 
-      if (data && data.data && Array.isArray(data.data)) {
-        for (let i = 0; i < data.data.length; i++) {
-          const item = data.data[i];
-          const art: Artwork = {
-            id: item.id,
-            title: item.title,
-            place_of_origin: item.place_of_origin,
-            artist_display: item.artist_display,
-            inscriptions: item.inscriptions,
-            date_start: item.date_start,
-            date_end: item.date_end,
-          };
-          allArtworks.push(art);
-        }
-      }
-
-      setRows(allArtworks);
+      setRows(mapped);
 
       if (data.pagination && data.pagination.total) {
         setTotalRecords(data.pagination.total);
       } else if (data.pagination && data.pagination.total_pages) {
         setTotalRecords(data.pagination.total_pages * limit);
       }
-    } catch (error) {
-      console.log("Something went wrong while fetching data:", error);
+    } catch (err) {
+      console.error("Failed to fetch artworks", err);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    loadPageData(page, rowsPerPage);
+    loadPage(page, rowsPerPage);
   }, [page, rowsPerPage]);
 
-  function handlePageChange(event: any) {
+  const onPage = (event: any) => {
     const newPage = Math.floor(event.first / event.rows) + 1;
     setPage(newPage);
-  }
+  };
 
-  function handleSelectionChange(event: any) {
-    const newSelection = event.value;
-    setSelectedRows(newSelection);
-  }
+  // -------------------------------------------------------------------
+  // SELECTION HANDLERS
+  // -------------------------------------------------------------------
 
-  async function handleSelectSubmit() {
-    const numberEntered = parseInt(inputNumber);
+  // Checkbox selection handler: Merges current page selection with global map
+  const onSelectionChange = (e: { value: Artwork[] }) => {
+    const newlySelected = new Set(e.value.map((r) => r.id));
+    const currentRowsIds = new Set(rows.map((r) => r.id));
 
-    if (isNaN(numberEntered) || numberEntered <= 0) {
+    setSelectedMap((prev) => {
+      const updated = new Map(prev);
+
+      // 1. Remove rows from the map that were on the current page and are now UNSELECTED
+      rows.forEach((r) => {
+        if (!newlySelected.has(r.id) && prev.has(r.id)) {
+          updated.delete(r.id);
+        }
+      });
+
+      // 2. Add all currently selected rows to the map
+      e.value.forEach((r) => updated.set(r.id, r));
+
+      return updated;
+    });
+  };
+
+  // Handler for the new 'Select N Rows' feature
+  const handleSelectSubmit = async () => {
+    const numberToSelect = parseInt(inputNumber);
+
+    if (isNaN(numberToSelect) || numberToSelect <= 0) {
       alert("Please enter a valid positive number!");
       return;
     }
 
-    let remainingRowsToSelect = numberEntered;
+    // Reset selection before bulk selecting
+    setSelectedMap(new Map());
+    
+    let remainingToSelect = numberToSelect;
     let currentPageNumber = 1;
-    let newlySelectedRows: Artwork[] = [];
+    let newSelectedRows: Artwork[] = [];
 
-    while (remainingRowsToSelect > 0) {
+    // Loop through API pages to fetch and select rows
+    while (remainingToSelect > 0) {
       const data: any = await fetchArtworks(currentPageNumber, rowsPerPage);
 
       if (!data || !data.data || data.data.length === 0) {
-        break;
+        break; // Stop if no more data
       }
 
-      const pageArtworks: Artwork[] = [];
+      const pageArtworks = (data.data || [])
+        .filter((d: any) => d.id)
+        .map(mapToArtwork);
 
-      for (let i = 0; i < data.data.length; i++) {
-        const item = data.data[i];
-        const art: Artwork = {
-          id: item.id,
-          title: item.title,
-          place_of_origin: item.place_of_origin,
-          artist_display: item.artist_display,
-          inscriptions: item.inscriptions,
-          date_start: item.date_start,
-          date_end: item.date_end,
-        };
-        pageArtworks.push(art);
-      }
-
-      const numberToTake = Math.min(remainingRowsToSelect, pageArtworks.length);
+      const numberToTake = Math.min(remainingToSelect, pageArtworks.length);
       const rowsToAdd = pageArtworks.slice(0, numberToTake);
-      newlySelectedRows = newlySelectedRows.concat(rowsToAdd);
 
-      remainingRowsToSelect = remainingRowsToSelect - numberToTake;
-      currentPageNumber = currentPageNumber + 1;
+      newSelectedRows = newSelectedRows.concat(rowsToAdd);
+      remainingToSelect -= numberToTake;
+      currentPageNumber++;
 
-      if (
-        data.pagination &&
-        currentPageNumber > data.pagination.total_pages
-      ) {
+      // Stop if we hit the end of total pages
+      if (data.pagination && currentPageNumber > data.pagination.total_pages) {
         break;
       }
     }
 
-    setSelectedRows(newlySelectedRows);
+    // Convert the collected array into a Map for state update
+    const newSelectedMap = new Map(newSelectedRows.map(r => [r.id, r]));
+    setSelectedMap(newSelectedMap);
 
+    // After selection, load the first page to show the selection immediately
+    // If the current page contains the first set of selected rows, they will be checked.
+    setPage(1); 
+    loadPage(1, rowsPerPage); 
+    
+    // Clear input and close panel
+    setInputNumber("");
     if (overlayRef.current) {
       overlayRef.current.hide();
     }
-  }
+  };
 
+
+  // -------------------------------------------------------------------
+  // RENDER COMPONENTS
+  // -------------------------------------------------------------------
+
+  // Custom Header for the Title column with the OverlayPanel
   const titleHeader = (
     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
       <span>Title</span>
@@ -166,7 +195,7 @@ const ArtworkTable: React.FC = () => {
         >
           <input
             type="number"
-            placeholder="Enter rows..."
+            placeholder="Enter rows to select..."
             value={inputNumber}
             onChange={(e) => setInputNumber(e.target.value)}
             style={{
@@ -176,7 +205,7 @@ const ArtworkTable: React.FC = () => {
             }}
           />
           <Button
-            label="Submit"
+            label="Select Rows"
             onClick={handleSelectSubmit}
             style={{ padding: "4px", fontSize: "14px" }}
           />
@@ -185,25 +214,33 @@ const ArtworkTable: React.FC = () => {
     </div>
   );
 
+  const rowsPerPageOptions = [
+    { label: "5", value: 5 },
+    { label: "10", value: 10 },
+    { label: "25", value: 25 },
+    { label: "50", value: 50 },
+  ];
+
   return (
     <div style={{ padding: "1rem" }}>
-      <h2 style={{ marginBottom: "1rem" }}>Artworks Table</h2>
+      <h3 style={{ marginBottom: "1rem" }}>Artworks</h3>
 
-      <DataTable
+      <DataTable<Artwork[]> // Use the inferred type or cast if necessary in your environment
         value={rows}
-        selection={selectedRows}
-        onSelectionChange={handleSelectionChange}
-        dataKey="id"
         paginator
         lazy
-        loading={loading}
+        rows={rowsPerPage}
         totalRecords={totalRecords}
         first={(page - 1) * rowsPerPage}
-        rows={rowsPerPage}
-        onPage={handlePageChange}
+        onPage={onPage}
+        loading={loading}
+        dataKey="id"
         removableSort
+        selection={selectedOnPage} // Only show selected rows from current page
+        onSelectionChange={onSelectionChange}
+        selectionMode="checkbox"
         paginatorLeft={
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <label htmlFor="rowsPerPage">Rows per page:</label>
             <Dropdown
               id="rowsPerPage"
@@ -218,28 +255,17 @@ const ArtworkTable: React.FC = () => {
           </div>
         }
       >
-        <Column
-          selectionMode="multiple"
-          headerStyle={{ width: "3rem" }}
-        ></Column>
-        <Column field="title" header={titleHeader}></Column>
-        <Column field="place_of_origin" header="Place"></Column>
-        <Column field="artist_display" header="Artist"></Column>
-        <Column field="inscriptions" header="Inscriptions"></Column>
-        <Column field="date_start" header="Start"></Column>
-        <Column field="date_end" header="End"></Column>
-      </DataTable>
+        <Column selectionMode="multiple" headerStyle={{ width: "3rem" }} />
 
-      <div style={{ marginTop: "1rem" }}>
-        <strong>Selected Artworks:</strong>{" "}
-        {selectedRows.length > 0 ? (
-          <span>
-            {selectedRows.map((art) => art.title).join(", ")}
-          </span>
-        ) : (
-          <span>None</span>
-        )}
-      </div>
+        {/* 🔑 Custom header added here */}
+        <Column field="title" header={titleHeader} /> 
+
+        <Column field="place_of_origin" header="Place" />
+        <Column field="artist_display" header="Artist" />
+        <Column field="inscriptions" header="Inscriptions" />
+        <Column field="date_start" header="Start" />
+        <Column field="date_end" header="End" />
+      </DataTable>
     </div>
   );
 };
