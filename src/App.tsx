@@ -1,120 +1,13 @@
-import DataTable from "./Component/DataTable"
-import { PrimeReactProvider } from 'primereact/api';
+import React from "react";
+import ArtworkTable from "./Component/DataTable";
 
-function App() {
-
-  const customers = [{
-    id: 1000,
-    name: 'James Butt',
-    country: {
-        name: 'Algeria',
-        code: 'dz'
-    },
-    company: 'Benton, John B Jr',
-    date: '2015-09-13',
-    status: 'unqualified',
-    verified: true,
-    activity: 17,
-    representative: {
-        name: 'Ioni Bowcher',
-        image: 'ionibowcher.png'
-    },
-    balance: 70663
-},
-{
-    id: 1000,
-    name: 'James Butt',
-    country: {
-        name: 'Algeria',
-        code: 'dz'
-    },
-    company: 'Benton, John B Jr',
-    date: '2015-09-13',
-    status: 'unqualified',
-    verified: true,
-    activity: 17,
-    representative: {
-        name: 'Ioni Bowcher',
-        image: 'ionibowcher.png'
-    },
-    balance: 70663
-},{
-    id: 1000,
-    name: 'James Butt',
-    country: {
-        name: 'Algeria',
-        code: 'dz'
-    },
-    company: 'Benton, John B Jr',
-    date: '2015-09-13',
-    status: 'unqualified',
-    verified: true,
-    activity: 17,
-    representative: {
-        name: 'Ioni Bowcher',
-        image: 'ionibowcher.png'
-    },
-    balance: 70663
-},{
-    id: 1000,
-    name: 'James Butt',
-    country: {
-        name: 'Algeria',
-        code: 'dz'
-    },
-    company: 'Benton, John B Jr',
-    date: '2015-09-13',
-    status: 'unqualified',
-    verified: true,
-    activity: 17,
-    representative: {
-        name: 'Ioni Bowcher',
-        image: 'ionibowcher.png'
-    },
-    balance: 70663
-},{
-    id: 1000,
-    name: 'James Butt',
-    country: {
-        name: 'Algeria',
-        code: 'dz'
-    },
-    company: 'Benton, John B Jr',
-    date: '2015-09-13',
-    status: 'unqualified',
-    verified: true,
-    activity: 17,
-    representative: {
-        name: 'Ioni Bowcher',
-        image: 'ionibowcher.png'
-    },
-    balance: 70663
-},{
-    id: 1000,
-    name: 'James Butt',
-    country: {
-        name: 'Algeria',
-        code: 'dz'
-    },
-    company: 'Benton, John B Jr',
-    date: '2015-09-13',
-    status: 'unqualified',
-    verified: true,
-    activity: 17,
-    representative: {
-        name: 'Ioni Bowcher',
-        image: 'ionibowcher.png'
-    },
-    balance: 70663
-}];
-
+const App: React.FC = () => {
   return (
-    <PrimeReactProvider>
+    <div style={{ padding: 16 }}>
+      <h2>Art Institute — Artworks (server-side pagination)</h2>
+      <ArtworkTable />
+    </div>
+  );
+};
 
-      <DataTable data={customers}/>
-
-    </PrimeReactProvider>
-  )
-}
-
-export default App
+export default App;
